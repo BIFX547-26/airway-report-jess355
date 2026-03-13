@@ -93,3 +93,5 @@ https://doi.org/10.1371/journal.pone.0099625.
 
 
 Posit deployment link: https://connect.posit.cloud/jess355/content/019ce49e-8268-8620-0dc8-3d881fc455d9?utm_source=publisher-positron
+
+GitHub pages link: https://bifx547-26.github.io/airway-report-jess355/
