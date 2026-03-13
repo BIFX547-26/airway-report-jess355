@@ -1,0 +1,44 @@
+[
+  {
+    "objectID": "Airway_shinylive.html",
+    "href": "Airway_shinylive.html",
+    "title": "Interactive Report: Airway Data",
+    "section": "",
+    "text": "Asthma is a chronic inflammatory respiratory disease affecting over 300 million people worldwide. Glucocorticoids (GCs) are a mainstay therapy for asthma due to their anti-inflammatory effects in multiple lung tissues, including the airway smooth muscle (ASM). GCs act by binding to glucocorticoid receptors (GRs), which translocate to cell nuclei and modulate transcription in a tissue-dependent manner. Despite their widespread use, the mechanism by which GCs suppress inflammation specifically in ASM remains poorly understood.\nThis report is based on the RNA-Seq transcriptome profiling study by Himes et al. (2014), which characterized transcriptomic changes in primary human ASM cell lines treated with dexamethasone (DEX) — a potent synthetic glucocorticoid — to better understand GC-induced gene expression changes in the context of asthma."
+  },
+  {
+    "objectID": "Airway_shinylive.html#background",
+    "href": "Airway_shinylive.html#background",
+    "title": "Interactive Report: Airway Data",
+    "section": "",
+    "text": "Asthma is a chronic inflammatory respiratory disease affecting over 300 million people worldwide. Glucocorticoids (GCs) are a mainstay therapy for asthma due to their anti-inflammatory effects in multiple lung tissues, including the airway smooth muscle (ASM). GCs act by binding to glucocorticoid receptors (GRs), which translocate to cell nuclei and modulate transcription in a tissue-dependent manner. Despite their widespread use, the mechanism by which GCs suppress inflammation specifically in ASM remains poorly understood.\nThis report is based on the RNA-Seq transcriptome profiling study by Himes et al. (2014), which characterized transcriptomic changes in primary human ASM cell lines treated with dexamethasone (DEX) — a potent synthetic glucocorticoid — to better understand GC-induced gene expression changes in the context of asthma."
+  },
+  {
+    "objectID": "Airway_shinylive.html#methods",
+    "href": "Airway_shinylive.html#methods",
+    "title": "Interactive Report: Airway Data",
+    "section": "Methods",
+    "text": "Methods\nFour primary human ASM cell lines from white male donors were treated with 1 µM dexamethasone or a control vehicle for 18 hours. RNA-Seq was performed to profile transcriptomic changes. An average of 58.9 million raw sequencing reads per sample were obtained and aligned to the hg19 human genome reference. Differential expression analysis was performed using Cufflinks, with significance determined by a Benjamini-Hochberg corrected p-value &lt; 0.05.\nThe dataset used in this report contains the top 2,000 differentially expressed genes (by adjusted p-value) from this experiment."
+  },
+  {
+    "objectID": "Airway_shinylive.html#results",
+    "href": "Airway_shinylive.html#results",
+    "title": "Interactive Report: Airway Data",
+    "section": "Results",
+    "text": "Results\nThe supplied differential-expression table includes many strongly DEX-responsive genes in ASM cells, including well-characterized glucocorticoid-responsive genes (e.g., DUSP1, KLF15, PER1, TSC22D3) and less-investigated candidates (e.g., C7, CCDC69, CRISPLD2).\nUse the sliders below to change the adjusted p-value threshold and the minimum absolute log2 fold-change used to classify genes as significant in the volcano plot. The fold-change threshold is applied symmetrically in both directions, so moving it updates both the left and right significance boundaries. Points further right or left indicate larger fold-changes, while points higher on the y-axis indicate greater statistical significance.\n#| '!! shinylive warning !!': |\n#|   shinylive does not work in self-contained HTML documents.\n#|   Please set `embed-resources: false` in your metadata.\n#| standalone: true\n#| data-files: top_2000.csv\n\nlibrary(shiny)\n\ndegs &lt;- read.csv(\"./top_2000.csv\")\ndegs$plot_padj &lt;- pmax(degs$padj, .Machine$double.xmin)\ndegs$neg_log10_padj &lt;- -log10(degs$plot_padj)\ndegs$gene_id &lt;- degs$X\n\nformat_threshold &lt;- function(threshold) {\n  formatC(threshold, format = \"f\", digits = 3)\n}\n\nformat_fold_change_threshold &lt;- function(threshold) {\n  formatC(threshold, format = \"f\", digits = 2)\n}\n\nui &lt;- fluidPage(\n  sliderInput(\n    \"padj_thresh\",\n    \"Adjusted p-value threshold\",\n    min = 0.001,\n    max = 0.100,\n    value = 0.050,\n    step = 0.001\n  ),\n  sliderInput(\n    \"fc_thresh\",\n    \"Minimum absolute log2 fold-change\",\n    min = 0,\n    max = ceiling(max(abs(degs$log2FoldChange), na.rm = TRUE) * 10) / 10,\n    value = 0,\n    step = 0.1\n  ),\n  textOutput(\"significance_summary\"),\n  plotOutput(\"volcano_plot\", height = \"550px\")\n)\n\nserver &lt;- function(input, output, session) {\n  current_significance &lt;- reactive({\n    !is.na(degs$padj) &\n      degs$padj &lt; input$padj_thresh &\n      !is.na(degs$log2FoldChange) &\n      abs(degs$log2FoldChange) &gt;= input$fc_thresh\n  })\n\n  output$significance_summary &lt;- renderText({\n    significant_count &lt;- sum(current_significance())\n\n    paste0(\n      significant_count,\n      \" genes are currently classified as significant at an adjusted p-value threshold of \",\n      format_threshold(input$padj_thresh),\n      \" and a minimum absolute log2 fold-change of \",\n      format_fold_change_threshold(input$fc_thresh),\n      \".\"\n    )\n  })\n\n  output$volcano_plot &lt;- renderPlot({\n    sig &lt;- current_significance()\n\n    plot(\n      degs$log2FoldChange,\n      degs$neg_log10_padj,\n      pch = 16,\n      col = ifelse(sig, \"#D55E00B3\", \"#808080B3\"),\n      xlab = \"log2 Fold Change\",\n      ylab = \"-log10(Adjusted P-value)\",\n      main = \"Volcano Plot of DEX-treated ASM Cells\"\n    )\n\n    abline(h = -log10(input$padj_thresh), col = \"#0072B2\", lty = 2, lwd = 2)\n\n    if (input$fc_thresh &gt; 0) {\n      abline(v = c(-input$fc_thresh, input$fc_thresh), col = \"#009E73\", lty = 3, lwd = 2)\n    }\n\n    legend(\n      \"topright\",\n      legend = c(\"Significant\", \"Not significant\"),\n      col = c(\"#D55E00\", \"grey50\"),\n      pch = 16,\n      bty = \"n\"\n    )\n  })\n}\n\nshinyApp(ui, server)"
+  },
+  {
+    "objectID": "Airway_shinylive.html#discussion",
+    "href": "Airway_shinylive.html#discussion",
+    "title": "Interactive Report: Airway Data",
+    "section": "Discussion",
+    "text": "Discussion\nA key finding of Himes et al. (2014) was the identification of CRISPLD2 (cysteine-rich secretory protein LCCL domain-containing 2) as a novel glucocorticoid-responsive gene. CRISPLD2 encodes a secreted protein previously implicated in lung development and endotoxin regulation. Notably:\n\nSNPs in CRISPLD2 were nominally associated with inhaled corticosteroid (ICS) resistance and bronchodilator response in asthma patients from genome-wide association studies (GWAS).\nDEX treatment significantly increased CRISPLD2 mRNA (~8-fold) and protein (~1.7-fold) expression in ASM cells.\nCRISPLD2 expression was also induced by the proinflammatory cytokine IL1β.\nsiRNA-mediated knockdown of CRISPLD2 increased IL1β-induced IL6 and IL8 expression, suggesting CRISPLD2 plays an anti-inflammatory role in ASM.\n\nGene set enrichment analysis of the 316 differentially expressed genes revealed overrepresentation of functional categories including glycoprotein/extracellular matrix, vasculature development, lung development, regulation of cell migration, and extracellular matrix organization — all relevant to asthma pathophysiology."
+  },
+  {
+    "objectID": "Airway_shinylive.html#citation",
+    "href": "Airway_shinylive.html#citation",
+    "title": "Interactive Report: Airway Data",
+    "section": "Citation",
+    "text": "Citation\nHimes, Blanca E., Xiaofeng Jiang, Peter Wagner, Ruoxi Hu, Qiyu Wang, Barbara Klanderman, Reid M. Whitaker, et al. 2014. “RNA-Seq Transcriptome Profiling Identifies CRISPLD2 as a Glucocorticoid Responsive Gene That Modulates Cytokine Function in Airway Smooth Muscle Cells.” Edited by Jan Peter Tuckermann. PLoS ONE 9 (6): e99625. https://doi.org/10.1371/journal.pone.0099625."
+  }
+]
