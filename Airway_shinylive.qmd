@@ -28,7 +28,7 @@ The supplied differential-expression table includes many strongly DEX-responsive
 
 Use the sliders below to change the adjusted p-value threshold and the minimum absolute log2 fold-change used to classify genes as significant in the volcano plot. The fold-change threshold is applied symmetrically in both directions, so moving it updates both the left and right significance boundaries. Points further right or left indicate larger fold-changes, while points higher on the y-axis indicate greater statistical significance.
 
-```{shinylive-r}
+```{shinylive}
 #| standalone: true
 #| data-files: top_2000.csv
 
