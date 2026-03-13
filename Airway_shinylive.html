@@ -90,6 +90,7 @@ ul.task-list li input[type="checkbox"] {
 <h2 class="anchored" data-anchor-id="results">Results</h2>
 <p>The supplied differential-expression table includes many strongly DEX-responsive genes in ASM cells, including well-characterized glucocorticoid-responsive genes (e.g., <em>DUSP1</em>, <em>KLF15</em>, <em>PER1</em>, <em>TSC22D3</em>) and less-investigated candidates (e.g., <em>C7</em>, <em>CCDC69</em>, <em>CRISPLD2</em>).</p>
 <p>Use the sliders below to change the adjusted p-value threshold and the minimum absolute log2 fold-change used to classify genes as significant in the volcano plot. The fold-change threshold is applied symmetrically in both directions, so moving it updates both the left and right significance boundaries. Points further right or left indicate larger fold-changes, while points higher on the y-axis indicate greater statistical significance.</p>
+<p>If the interactive app below does not load, open this page through a web server such as GitHub Pages, Posit Connect, or <code>python3 -m http.server</code>. Shinylive will not run correctly when the HTML file is opened directly from disk.</p>
 <pre class="shinylive-r" data-engine="r"><code>#| '!! shinylive warning !!': |
 #|   shinylive does not work in self-contained HTML documents.
 #|   Please set `embed-resources: false` in your metadata.
