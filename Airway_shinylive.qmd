@@ -2,10 +2,12 @@
 title: "Interactive Report: Airway Data"
 date: March 5, 2026
 bibliography: references.bib
-format: html
+format:
+  html:
+    embed-resources: false
 filters:
   - shinylive
-resources: 
+resources:
   - top_2000.csv
 ---
 
