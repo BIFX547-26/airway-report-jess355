@@ -1,6 +1,6 @@
 library(shiny)
 
-degs <- read.csv("./top_2000.csv")
+degs <- read.csv("Airway_shinylive_files/top_2000.csv")
 degs$plot_padj <- pmax(degs$padj, .Machine$double.xmin)
 degs$neg_log10_padj <- -log10(degs$plot_padj)
 degs$gene_id <- degs$X

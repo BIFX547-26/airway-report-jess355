@@ -135,7 +135,7 @@ ul.task-list li input[type="checkbox"] {
 
 library(shiny)
 
-degs &lt;- read.csv("./top_2000.csv")
+degs &lt;- read.csv("Airway_shinylive_files/top_2000.csv")
 degs$plot_padj &lt;- pmax(degs$padj, .Machine$double.xmin)
 degs$neg_log10_padj &lt;- -log10(degs$plot_padj)
 degs$gene_id &lt;- degs$X
