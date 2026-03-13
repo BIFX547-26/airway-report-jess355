@@ -36,11 +36,6 @@ ul.task-list li input[type="checkbox"] {
 <script src="Airway_shinylive_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="Airway_shinylive_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="Airway_shinylive_files/libs/bootstrap/bootstrap-0af74015e85f4e1b3eeb66793181d02e.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
-<meta name="shinylive:serviceworker_dir" content=".">
-<script src="Airway_shinylive_files/libs/quarto-contrib/shinylive-0.9.1/shinylive/load-shinylive-sw.js" type="module"></script>
-<script src="Airway_shinylive_files/libs/quarto-contrib/shinylive-0.9.1/shinylive/run-python-blocks.js" type="module"></script>
-<link href="Airway_shinylive_files/libs/quarto-contrib/shinylive-0.9.1/shinylive/shinylive.css" rel="stylesheet">
-<link href="Airway_shinylive_files/libs/quarto-contrib/shinylive-quarto-css/shinylive-quarto.css" rel="stylesheet">
 
 
 </head>
@@ -83,202 +78,27 @@ ul.task-list li input[type="checkbox"] {
 </section>
 <section id="methods" class="level2">
 <h2 class="anchored" data-anchor-id="methods">Methods</h2>
-<p>Four primary human ASM cell lines from white male donors were treated with 1 uM dexamethasone or a control vehicle for 18 hours. RNA-Seq was performed to profile transcriptomic changes. An average of 58.9 million raw sequencing reads per sample were obtained and aligned to the hg19 human genome reference. Differential expression analysis was performed using Cufflinks, with significance determined by a Benjamini-Hochberg corrected p-value &lt; 0.05.</p>
+<p>Four primary human ASM cell lines from white male donors were treated with 1 µM dexamethasone or a control vehicle for 18 hours. RNA-Seq was performed to profile transcriptomic changes. An average of 58.9 million raw sequencing reads per sample were obtained and aligned to the hg19 human genome reference. Differential expression analysis was performed using Cufflinks, with significance determined by a Benjamini-Hochberg corrected p-value &lt; 0.05.</p>
 <p>The dataset used in this report contains the top 2,000 differentially expressed genes (by adjusted p-value) from this experiment.</p>
 </section>
 <section id="results" class="level2">
 <h2 class="anchored" data-anchor-id="results">Results</h2>
 <p>The supplied differential-expression table includes many strongly DEX-responsive genes in ASM cells, including well-characterized glucocorticoid-responsive genes (e.g., <em>DUSP1</em>, <em>KLF15</em>, <em>PER1</em>, <em>TSC22D3</em>) and less-investigated candidates (e.g., <em>C7</em>, <em>CCDC69</em>, <em>CRISPLD2</em>).</p>
-<p>The Shinylive app below keeps the runtime light by using only <code>shiny</code> plus base R graphics. When the app starts, it downloads the differential-expression CSV into the browser’s temporary file system and then reads it into R for plotting. Use the sliders to change the adjusted p-value threshold and the minimum absolute log2 fold-change used to classify genes as significant in the volcano plot. Click any point to inspect one gene in more detail.</p>
-<pre class="shinylive-r" data-engine="r"><code>#| '!! shinylive warning !!': |
-#|   shinylive does not work in self-contained HTML documents.
-#|   Please set `embed-resources: false` in your metadata.
-#| standalone: true
-#| viewerHeight: 900
-## file: app.R
-library(shiny)
-
-data_file &lt;- "top_2000.csv"
-data_url &lt;- "https://raw.githubusercontent.com/BIFX547-26/airway-report-jess355/main/top_2000.csv"
-
-if (!file.exists(data_file)) {
-    download.file(data_url, destfile = data_file, mode = "wb", quiet = TRUE)
-}
-
-degs &lt;- read.csv(
-    data_file,
-    stringsAsFactors = FALSE,
-    check.names = FALSE
-)
-names(degs)[1] &lt;- "gene_id"
-degs$plot_padj &lt;- pmax(degs$padj, .Machine$double.xmin)
-degs$neg_log10_padj &lt;- -log10(degs$plot_padj)
-
-format_threshold &lt;- function(threshold) {
-    formatC(threshold, format = "f", digits = 3)
-}
-
-format_fold_change_threshold &lt;- function(threshold) {
-    formatC(threshold, format = "f", digits = 2)
-}
-
-plot_data &lt;- function(data, padj_threshold, fold_change_threshold) {
-    current_data &lt;- data
-    current_data$significance &lt;- ifelse(
-        !is.na(current_data$padj) &amp;
-            current_data$padj &lt; padj_threshold &amp;
-            !is.na(current_data$log2FoldChange) &amp;
-            abs(current_data$log2FoldChange) &gt;= fold_change_threshold,
-        "Significant",
-        "Not significant"
-    )
-    current_data
-}
-
-selected_gene_text &lt;- function(gene_row) {
-    if (nrow(gene_row) == 0) {
-        return("Click a point in the volcano plot to inspect one gene.")
-    }
-
-    paste0(
-        gene_row$symbol[[1]],
-        " (Gene ID: ",
-        gene_row$gene_id[[1]],
-        ")\nlog2 Fold Change: ",
-        round(gene_row$log2FoldChange[[1]], 3),
-        "\nAdjusted p-value: ",
-        signif(gene_row$padj[[1]], 3),
-        "\nClassification: ",
-        gene_row$significance[[1]]
-    )
-}
-
-ui &lt;- page_fluid(
-    sliderInput(
-        inputId = "significance_threshold",
-        label = "Adjusted p-value threshold",
-        min = 0.001,
-        max = 0.100,
-        value = 0.050,
-        step = 0.001
-    ),
-    sliderInput(
-        inputId = "fold_change_threshold",
-        label = "Minimum absolute log2 fold-change",
-        min = 0,
-        max = ceiling(max(abs(degs$log2FoldChange), na.rm = TRUE) * 10) / 10,
-        value = 0,
-        step = 0.1
-    ),
-    textOutput("significance_summary"),
-    plotOutput(
-        outputId = "volcano_plot",
-        height = "550px",
-        click = "volcano_click"
-    ),
-    verbatimTextOutput("selected_gene")
-)
-
-server &lt;- function(input, output, session) {
-    current_plot_data &lt;- reactive({
-        plot_data(
-            degs,
-            input$significance_threshold,
-            input$fold_change_threshold
-        )
-    })
-
-    output$significance_summary &lt;- renderText({
-        threshold &lt;- input$significance_threshold
-        fold_change_threshold &lt;- input$fold_change_threshold
-        current_data &lt;- current_plot_data()
-        significant_count &lt;- sum(current_data$significance == "Significant")
-
-        paste0(
-            significant_count,
-            " genes are currently classified as significant at an adjusted p-value threshold of ",
-            format_threshold(threshold),
-            " and a minimum absolute log2 fold-change of ",
-            format_fold_change_threshold(fold_change_threshold),
-            "."
-        )
-    })
-
-    output$volcano_plot &lt;- renderPlot({
-        threshold &lt;- input$significance_threshold
-        fold_change_threshold &lt;- input$fold_change_threshold
-        current_data &lt;- current_plot_data()
-        point_colors &lt;- ifelse(
-            current_data$significance == "Significant",
-            "#D55E00",
-            "grey70"
-        )
-
-        graphics::par(mar = c(5, 5, 3, 1) + 0.1)
-        plot(
-            current_data$log2FoldChange,
-            current_data$neg_log10_padj,
-            pch = 16,
-            cex = 0.8,
-            col = grDevices::adjustcolor(point_colors, alpha.f = 0.7),
-            xlab = "log2 Fold Change",
-            ylab = "-log10(Adjusted P-value)",
-            main = "Volcano Plot of DEX-treated ASM Cells"
-        )
-        abline(
-            h = -log10(threshold),
-            col = "#0072B2",
-            lty = 2,
-            lwd = 2
-        )
-        if (fold_change_threshold &gt; 0) {
-            abline(
-                v = c(-fold_change_threshold, fold_change_threshold),
-                col = "#009E73",
-                lty = 3,
-                lwd = 2
-            )
-        }
-
-        top_hits &lt;- current_data[current_data$significance == "Significant", , drop = FALSE]
-        if (nrow(top_hits) &gt; 0) {
-            top_hits &lt;- top_hits[order(top_hits$padj), , drop = FALSE]
-            top_hits &lt;- head(top_hits, 8)
-            text(
-                x = top_hits$log2FoldChange,
-                y = top_hits$neg_log10_padj,
-                labels = top_hits$symbol,
-                pos = 3,
-                cex = 0.7
-            )
-        }
-
-        legend(
-            "topright",
-            legend = c("Significant", "Not significant"),
-            col = c("#D55E00", "grey70"),
-            pch = 16,
-            bty = "n",
-            title = "Significance"
-        )
-    })
-
-    output$selected_gene &lt;- renderText({
-        current_data &lt;- current_plot_data()
-        clicked_gene &lt;- nearPoints(
-            current_data,
-            input$volcano_click,
-            xvar = "log2FoldChange",
-            yvar = "neg_log10_padj",
-            maxpoints = 1,
-            threshold = 10
-        )
-
-        selected_gene_text(clicked_gene)
-    })
-}
-
-shinyApp(ui, server)</code></pre>
+<p>Use the sliders below to change the adjusted p-value threshold and the minimum absolute log2 fold-change used to classify genes as significant in the volcano plot. The fold-change threshold is applied symmetrically in both directions, so moving it updates both the left and right significance boundaries. Points further right or left indicate larger fold-changes, while points higher on the y-axis indicate greater statistical significance.</p>
+<div class="cell">
+<div class="cell-output-display">
+<div class="form-group shiny-input-container">
+<label class="control-label" id="significance_threshold-label" for="significance_threshold">Adjusted p-value threshold</label>
+<input class="js-range-slider" id="significance_threshold" data-skin="shiny" data-min="0.001" data-max="0.1" data-from="0.05" data-step="0.001" data-grid="true" data-grid-num="9.9" data-grid-snap="false" data-prettify-separator="," data-prettify-enabled="true" data-keyboard="true" data-data-type="number">
+</div>
+<div class="form-group shiny-input-container">
+<label class="control-label" id="fold_change_threshold-label" for="fold_change_threshold">Minimum absolute log2 fold-change</label>
+<input class="js-range-slider" id="fold_change_threshold" data-skin="shiny" data-min="0" data-max="9.6" data-from="0" data-step="0.1" data-grid="true" data-grid-num="9.6" data-grid-snap="false" data-prettify-separator="," data-prettify-enabled="true" data-keyboard="true" data-data-type="number">
+</div>
+<div id="significance_summary" class="shiny-text-output"></div>
+<div class="plotly html-widget html-widget-output shiny-report-size shiny-report-theme html-fill-item" id="volcano_plot" style="width:100%;height:550px;"></div>
+</div>
+</div>
 </section>
 <section id="discussion" class="level2">
 <h2 class="anchored" data-anchor-id="discussion">Discussion</h2>
@@ -286,14 +106,224 @@ shinyApp(ui, server)</code></pre>
 <ul>
 <li>SNPs in <em>CRISPLD2</em> were nominally associated with inhaled corticosteroid (ICS) resistance and bronchodilator response in asthma patients from genome-wide association studies (GWAS).</li>
 <li>DEX treatment significantly increased <em>CRISPLD2</em> mRNA (~8-fold) and protein (~1.7-fold) expression in ASM cells.</li>
-<li><em>CRISPLD2</em> expression was also induced by the proinflammatory cytokine IL1beta.</li>
-<li>siRNA-mediated knockdown of <em>CRISPLD2</em> increased IL1beta-induced <em>IL6</em> and <em>IL8</em> expression, suggesting <em>CRISPLD2</em> plays an anti-inflammatory role in ASM.</li>
+<li><em>CRISPLD2</em> expression was also induced by the proinflammatory cytokine IL1β.</li>
+<li>siRNA-mediated knockdown of <em>CRISPLD2</em> increased IL1β-induced <em>IL6</em> and <em>IL8</em> expression, suggesting <em>CRISPLD2</em> plays an anti-inflammatory role in ASM.</li>
 </ul>
 <p>Gene set enrichment analysis of the 316 differentially expressed genes revealed overrepresentation of functional categories including glycoprotein/extracellular matrix, vasculature development, lung development, regulation of cell migration, and extracellular matrix organization — all relevant to asthma pathophysiology.</p>
 </section>
 <section id="citation" class="level2">
 <h2 class="anchored" data-anchor-id="citation">Citation</h2>
-<p>Himes, Blanca E., Xiaofeng Jiang, Peter Wagner, Ruoxi Hu, Qiyu Wang, Barbara Klanderman, Reid M. Whitaker, et al.&nbsp;2014. “RNA-Seq Transcriptome Profiling Identifies CRISPLD2 as a Glucocorticoid Responsive Gene That Modulates Cytokine Function in Airway Smooth Muscle Cells.” Edited by Jan Peter Tuckermann. <em>PLoS ONE</em> 9 (6): e99625. https://doi.org/10.1371/journal.pone.0099625.</p>
+<p>Himes, Blanca E., Xiaofeng Jiang, Peter Wagner, Ruoxi Hu, Qiyu Wang, Barbara Klanderman, Reid M. Whitaker, et al.&nbsp;2014. “RNA-Seq Transcriptome Profiling Identifies CRISPLD2 as a Glucocorticoid Responsive Gene That Modulates Cytokine Function in Airway Smooth Muscle Cells.” Edited by Jan Peter Tuckermann. PLoS ONE 9 (6): e99625. https://doi.org/10.1371/journal.pone.0099625.</p>
+<p>
+<script type="application/shiny-prerendered" data-context="server-start">
+library(shiny)
+library(plotly)
+library(tidyverse)
+
+degs <- read.csv("top_2000.csv")
+degs <- degs %>%
+    mutate(
+        plot_padj = pmax(padj, .Machine$double.xmin),
+        neg_log10_padj = -log10(plot_padj),
+        gene_id = X
+    )
+
+format_threshold <- function(threshold) {
+    formatC(threshold, format = "f", digits = 3)
+}
+
+format_fold_change_threshold <- function(threshold) {
+    formatC(threshold, format = "f", digits = 2)
+}
+
+plot_data <- function(padj_threshold, fold_change_threshold) {
+    degs %>%
+        mutate(
+            significance = if_else(
+                !is.na(padj) &
+                    padj < padj_threshold &
+                    !is.na(log2FoldChange) &
+                    abs(log2FoldChange) >= fold_change_threshold,
+                "Significant",
+                "Not significant"
+            )
+        )
+}
+</script>
+ 
+<script type="application/shiny-prerendered" data-context="server">
+current_plot_data <- reactive({
+    plot_data(
+        input$significance_threshold,
+        input$fold_change_threshold
+    )
+})
+
+output$significance_summary <- renderText({
+    threshold <- input$significance_threshold
+    fold_change_threshold <- input$fold_change_threshold
+    current_data <- current_plot_data()
+    significant_count <- sum(current_data$significance == "Significant")
+
+    paste0(
+        significant_count,
+        " genes are currently classified as significant at an adjusted p-value threshold of ",
+        format_threshold(threshold),
+        " and a minimum absolute log2 fold-change of ",
+        format_fold_change_threshold(fold_change_threshold),
+        "."
+    )
+})
+
+output$volcano_plot <- renderPlotly({
+    threshold <- input$significance_threshold
+    fold_change_threshold <- input$fold_change_threshold
+    current_data <- current_plot_data()
+    threshold_description <- paste0(
+        "adjusted p < ",
+        format_threshold(threshold),
+        " and |log2 fold change| >= ",
+        format_fold_change_threshold(fold_change_threshold)
+    )
+    plot_shapes <- list(
+        list(
+            type = "line",
+            x0 = min(current_data$log2FoldChange, na.rm = TRUE),
+            x1 = max(current_data$log2FoldChange, na.rm = TRUE),
+            y0 = -log10(threshold),
+            y1 = -log10(threshold),
+            line = list(color = "#0072B2", dash = "dash", width = 2)
+        )
+    )
+
+    if (fold_change_threshold > 0) {
+        plot_shapes <- c(
+            plot_shapes,
+            list(
+                list(
+                    type = "line",
+                    x0 = -fold_change_threshold,
+                    x1 = -fold_change_threshold,
+                    y0 = 0,
+                    y1 = max(current_data$neg_log10_padj, na.rm = TRUE),
+                    line = list(color = "#009E73", dash = "dot", width = 2)
+                ),
+                list(
+                    type = "line",
+                    x0 = fold_change_threshold,
+                    x1 = fold_change_threshold,
+                    y0 = 0,
+                    y1 = max(current_data$neg_log10_padj, na.rm = TRUE),
+                    line = list(color = "#009E73", dash = "dot", width = 2)
+                )
+            )
+        )
+    }
+
+    significant_data <- current_data %>%
+        filter(significance == "Significant") %>%
+        mutate(
+            hover_text = paste0(
+                "<b>", symbol, "<\u002fb><br>",
+                "Gene ID: ", gene_id, "<br>",
+                "log2 Fold Change: ", round(log2FoldChange, 3), "<br>",
+                "Adjusted p-value: ", signif(padj, 3), "<br>",
+                "Classification: ", significance
+            )
+        )
+
+    nonsignificant_data <- current_data %>%
+        filter(significance == "Not significant") %>%
+        mutate(
+            hover_text = paste0(
+                "<b>", symbol, "<\u002fb><br>",
+                "Gene ID: ", gene_id, "<br>",
+                "log2 Fold Change: ", round(log2FoldChange, 3), "<br>",
+                "Adjusted p-value: ", signif(padj, 3), "<br>",
+                "Classification: ", significance
+            )
+        )
+
+    plot_ly() %>%
+        add_markers(
+            data = significant_data,
+            x = ~log2FoldChange,
+            y = ~neg_log10_padj,
+            text = ~hover_text,
+            hovertemplate = "%{text}<extra><\u002fextra>",
+            name = paste0("Significant (", threshold_description, ")"),
+            marker = list(color = "#D55E00", size = 8, opacity = 0.7)
+        ) %>%
+        add_markers(
+            data = nonsignificant_data,
+            x = ~log2FoldChange,
+            y = ~neg_log10_padj,
+            text = ~hover_text,
+            hovertemplate = "%{text}<extra><\u002fextra>",
+            name = paste0("Not significant (fails ", threshold_description, ")"),
+            marker = list(color = "grey70", size = 8, opacity = 0.7)
+        ) %>%
+        layout(
+            title = list(text = "Volcano Plot of DEX-treated ASM Cells"),
+            xaxis = list(title = "log2 Fold Change"),
+            yaxis = list(title = "-log10(Adjusted P-value)"),
+            shapes = plot_shapes,
+            legend = list(title = list(text = "Significance"))
+        ) %>%
+        config(displayModeBar = TRUE)
+})
+</script>
+ 
+<script type="application/shiny-prerendered" data-context="server-extras">
+ojs_define <- function(..., .session = shiny::getDefaultReactiveDomain()) {
+  quos <- rlang::enquos(...)
+  vars <- rlang::list2(...)
+  nm <- names(vars)
+  if (is.null(nm)) {
+    nm <- rep_len("", length(vars))
+  }
+  mapply(
+    function(q, nm, val) {
+      # Infer name, if possible
+      if (nm == "") {
+        tryCatch(
+          {
+            nm <- rlang::as_name(q)
+          },
+          error = function(e) {
+            code <- paste(collapse = "\n", deparse(rlang::f_rhs(q)))
+            stop(
+              "ojs_define() could not create a name for the argument: ",
+              code
+            )
+          }
+        )
+      }
+      .session$output[[nm]] <- val
+      outputOptions(.session$output, nm, suspendWhenHidden = FALSE)
+      .session$sendCustomMessage("ojs-export", list(name = nm))
+      NULL
+    },
+    quos,
+    nm,
+    vars,
+    SIMPLIFY = FALSE,
+    USE.NAMES = FALSE
+  )
+  invisible()
+}
+</script>
+</p>
+<!--html_preserve-->
+<script type="application/shiny-prerendered" data-context="dependencies">
+{"type":"list","attributes":{},"value":[{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["ionrangeslider-javascript"]},{"type":"character","attributes":{},"value":["2.3.1"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["www/shared/ionrangeslider"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["js/ion.rangeSlider.min.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["shiny"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["1.13.0"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["strftime"]},{"type":"character","attributes":{},"value":["0.9.2"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["www/shared/strftime"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["strftime-min.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["shiny"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["1.13.0"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["ionrangeslider-css"]},{"type":"character","attributes":{},"value":["2.3.1"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["www/shared/ionrangeslider"]}]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["css/ion.rangeSlider.css"]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["shiny"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["1.13.0"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["htmltools-fill"]},{"type":"character","attributes":{},"value":["0.5.9"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["fill"]}]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["fill.css"]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["htmltools"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.5.9"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["htmlwidgets"]},{"type":"character","attributes":{},"value":["1.6.4"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["www"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["htmlwidgets.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["htmlwidgets"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["1.6.4"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["plotly-binding"]},{"type":"character","attributes":{},"value":["4.12.0"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["htmlwidgets"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["plotly.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["plotly"]},{"type":"logical","attributes":{},"value":[false]},{"type":"character","attributes":{},"value":["4.12.0"]}]}]}
+</script>
+<!--/html_preserve-->
+<!--html_preserve-->
+<script type="application/shiny-prerendered" data-context="execution_dependencies">
+{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["packages"]}},"value":[{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["packages","version"]},"class":{"type":"character","attributes":{},"value":["data.frame"]},"row.names":{"type":"integer","attributes":{},"value":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69]}},"value":[{"type":"character","attributes":{},"value":["base","bslib","cachem","cli","compiler","data.table","datasets","digest","dplyr","evaluate","farver","fastmap","forcats","generics","ggplot2","glue","graphics","grDevices","grid","gtable","hms","htmltools","htmlwidgets","httpuv","httr","jquerylib","jsonlite","knitr","later","lazyeval","lifecycle","lubridate","magrittr","memoise","methods","mime","otel","pillar","pkgconfig","plotly","promises","purrr","R6","RColorBrewer","Rcpp","readr","rlang","rmarkdown","S7","sass","scales","shiny","stats","stringi","stringr","tibble","tidyr","tidyselect","tidyverse","timechange","tools","tzdb","utils","vctrs","viridisLite","withr","xfun","xtable","yaml"]},{"type":"character","attributes":{},"value":["4.5.1","0.10.0","1.1.0","3.6.5","4.5.1","1.18.2.1","4.5.1","0.6.39","1.2.0","1.0.5","2.1.2","1.2.0","1.0.1","0.1.4","4.0.2","1.8.0","4.5.1","4.5.1","4.5.1","0.3.6","1.1.4","0.5.9","1.6.4","1.6.16","1.4.8","0.1.4","2.0.0","1.51","1.4.7","0.2.2","1.0.5","1.9.5","2.0.4","2.0.1","4.5.1","0.13","0.2.0","1.11.1","2.0.3","4.12.0","1.5.0","1.2.1","2.6.1","1.1-3","1.1.1","2.2.0","1.1.7","2.30","0.2.1","0.4.10","1.4.0","1.13.0","4.5.1","1.8.7","1.6.0","3.3.1","1.3.2","1.2.1","2.0.0","0.4.0","4.5.1","0.5.0","4.5.1","0.7.1","0.4.3","3.0.2","0.56","1.8-8","2.3.12"]}]}]}
+</script>
+<!--/html_preserve-->
 </section>
 
 </main>
