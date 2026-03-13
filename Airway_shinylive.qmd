@@ -1,10 +1,9 @@
 ---
 title: "Interactive Report: Airway Data"
 date: March 5, 2026
-bibliography: references.bib
-format:
-  html:
-    embed-resources: false
+bibliography: 
+  - references.bib
+format: html
 filters:
   - shinylive
 resources:
@@ -29,14 +28,11 @@ The supplied differential-expression table includes many strongly DEX-responsive
 
 Use the sliders below to change the adjusted p-value threshold and the minimum absolute log2 fold-change used to classify genes as significant in the volcano plot. The fold-change threshold is applied symmetrically in both directions, so moving it updates both the left and right significance boundaries. Points further right or left indicate larger fold-changes, while points higher on the y-axis indicate greater statistical significance.
 
-If the interactive app below does not load, open this page through a web server such as GitHub Pages, Posit Connect, or `python3 -m http.server`. Shinylive will not run correctly when the HTML file is opened directly from disk.
-
 ```{shinylive-r}
-#| standalone: true
 
 library(shiny)
 
-degs <- read.csv("top_2000.csv")
+degs <- read.csv("./top_2000.csv")
 degs$plot_padj <- pmax(degs$padj, .Machine$double.xmin)
 degs$neg_log10_padj <- -log10(degs$plot_padj)
 degs$gene_id <- degs$X
