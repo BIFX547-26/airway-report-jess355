@@ -5,7 +5,8 @@ bibliography: references.bib
 format:
   html:
     embed-resources: false
-server: shiny
+filters: 
+  - shinylive
 ---
 
 ## Background
@@ -22,199 +23,100 @@ The dataset used in this report contains the top 2,000 differentially expressed 
 
 ## Results
 
-```{r}
-#| context: setup
-#| echo: false
-#| message: false
-#| warning: false
-library(shiny)
-library(plotly)
-library(tidyverse)
-
-degs <- read.csv("top_2000.csv")
-degs <- degs %>%
-    mutate(
-        plot_padj = pmax(padj, .Machine$double.xmin),
-        neg_log10_padj = -log10(plot_padj),
-        gene_id = X
-    )
-
-format_threshold <- function(threshold) {
-    formatC(threshold, format = "f", digits = 3)
-}
-
-format_fold_change_threshold <- function(threshold) {
-    formatC(threshold, format = "f", digits = 2)
-}
-
-plot_data <- function(padj_threshold, fold_change_threshold) {
-    degs %>%
-        mutate(
-            significance = if_else(
-                !is.na(padj) &
-                    padj < padj_threshold &
-                    !is.na(log2FoldChange) &
-                    abs(log2FoldChange) >= fold_change_threshold,
-                "Significant",
-                "Not significant"
-            )
-        )
-}
-```
-
 The supplied differential-expression table includes many strongly DEX-responsive genes in ASM cells, including well-characterized glucocorticoid-responsive genes (e.g., *DUSP1*, *KLF15*, *PER1*, *TSC22D3*) and less-investigated candidates (e.g., *C7*, *CCDC69*, *CRISPLD2*).
 
 Use the sliders below to change the adjusted p-value threshold and the minimum absolute log2 fold-change used to classify genes as significant in the volcano plot. The fold-change threshold is applied symmetrically in both directions, so moving it updates both the left and right significance boundaries. Points further right or left indicate larger fold-changes, while points higher on the y-axis indicate greater statistical significance.
 
-```{r}
-#| echo: false
-tagList(
-    sliderInput(
-        inputId = "significance_threshold",
-        label = "Adjusted p-value threshold",
-        min = 0.001,
-        max = 0.100,
-        value = 0.050,
-        step = 0.001
-    ),
-    sliderInput(
-        inputId = "fold_change_threshold",
-        label = "Minimum absolute log2 fold-change",
-        min = 0,
-        max = ceiling(max(abs(degs$log2FoldChange), na.rm = TRUE) * 10) / 10,
-        value = 0,
-        step = 0.1
-    ),
-    textOutput("significance_summary"),
-    plotlyOutput(
-        outputId = "volcano_plot",
-        height = "550px"
-    )
+```{shinylive-r}
+#| standalone: true
+
+library(shiny)
+
+degs <- read.csv("top_2000.csv")
+degs$plot_padj <- pmax(degs$padj, .Machine$double.xmin)
+degs$neg_log10_padj <- -log10(degs$plot_padj)
+degs$gene_id <- degs$X
+
+format_threshold <- function(threshold) {
+  formatC(threshold, format = "f", digits = 3)
+}
+
+format_fold_change_threshold <- function(threshold) {
+  formatC(threshold, format = "f", digits = 2)
+}
+
+ui <- fluidPage(
+  sliderInput(
+    "padj_thresh",
+    "Adjusted p-value threshold",
+    min = 0.001,
+    max = 0.100,
+    value = 0.050,
+    step = 0.001
+  ),
+  sliderInput(
+    "fc_thresh",
+    "Minimum absolute log2 fold-change",
+    min = 0,
+    max = ceiling(max(abs(degs$log2FoldChange), na.rm = TRUE) * 10) / 10,
+    value = 0,
+    step = 0.1
+  ),
+  textOutput("significance_summary"),
+  plotOutput("volcano_plot", height = "550px")
 )
-```
 
-```{r}
-#| context: server
-current_plot_data <- reactive({
-    plot_data(
-        input$significance_threshold,
-        input$fold_change_threshold
-    )
-})
+server <- function(input, output, session) {
+  current_significance <- reactive({
+    !is.na(degs$padj) &
+      degs$padj < input$padj_thresh &
+      !is.na(degs$log2FoldChange) &
+      abs(degs$log2FoldChange) >= input$fc_thresh
+  })
 
-output$significance_summary <- renderText({
-    threshold <- input$significance_threshold
-    fold_change_threshold <- input$fold_change_threshold
-    current_data <- current_plot_data()
-    significant_count <- sum(current_data$significance == "Significant")
+  output$significance_summary <- renderText({
+    significant_count <- sum(current_significance())
 
     paste0(
-        significant_count,
-        " genes are currently classified as significant at an adjusted p-value threshold of ",
-        format_threshold(threshold),
-        " and a minimum absolute log2 fold-change of ",
-        format_fold_change_threshold(fold_change_threshold),
-        "."
+      significant_count,
+      " genes are currently classified as significant at an adjusted p-value threshold of ",
+      format_threshold(input$padj_thresh),
+      " and a minimum absolute log2 fold-change of ",
+      format_fold_change_threshold(input$fc_thresh),
+      "."
     )
-})
+  })
 
-output$volcano_plot <- renderPlotly({
-    threshold <- input$significance_threshold
-    fold_change_threshold <- input$fold_change_threshold
-    current_data <- current_plot_data()
-    threshold_description <- paste0(
-        "adjusted p < ",
-        format_threshold(threshold),
-        " and |log2 fold change| >= ",
-        format_fold_change_threshold(fold_change_threshold)
-    )
-    plot_shapes <- list(
-        list(
-            type = "line",
-            x0 = min(current_data$log2FoldChange, na.rm = TRUE),
-            x1 = max(current_data$log2FoldChange, na.rm = TRUE),
-            y0 = -log10(threshold),
-            y1 = -log10(threshold),
-            line = list(color = "#0072B2", dash = "dash", width = 2)
-        )
+  output$volcano_plot <- renderPlot({
+    sig <- current_significance()
+
+    plot(
+      degs$log2FoldChange,
+      degs$neg_log10_padj,
+      pch = 16,
+      col = ifelse(sig, "#D55E00B3", "#808080B3"),
+      xlab = "log2 Fold Change",
+      ylab = "-log10(Adjusted P-value)",
+      main = "Volcano Plot of DEX-treated ASM Cells"
     )
 
-    if (fold_change_threshold > 0) {
-        plot_shapes <- c(
-            plot_shapes,
-            list(
-                list(
-                    type = "line",
-                    x0 = -fold_change_threshold,
-                    x1 = -fold_change_threshold,
-                    y0 = 0,
-                    y1 = max(current_data$neg_log10_padj, na.rm = TRUE),
-                    line = list(color = "#009E73", dash = "dot", width = 2)
-                ),
-                list(
-                    type = "line",
-                    x0 = fold_change_threshold,
-                    x1 = fold_change_threshold,
-                    y0 = 0,
-                    y1 = max(current_data$neg_log10_padj, na.rm = TRUE),
-                    line = list(color = "#009E73", dash = "dot", width = 2)
-                )
-            )
-        )
+    abline(h = -log10(input$padj_thresh), col = "#0072B2", lty = 2, lwd = 2)
+
+    if (input$fc_thresh > 0) {
+      abline(v = c(-input$fc_thresh, input$fc_thresh), col = "#009E73", lty = 3, lwd = 2)
     }
 
-    significant_data <- current_data %>%
-        filter(significance == "Significant") %>%
-        mutate(
-            hover_text = paste0(
-                "<b>", symbol, "</b><br>",
-                "Gene ID: ", gene_id, "<br>",
-                "log2 Fold Change: ", round(log2FoldChange, 3), "<br>",
-                "Adjusted p-value: ", signif(padj, 3), "<br>",
-                "Classification: ", significance
-            )
-        )
+    legend(
+      "topright",
+      legend = c("Significant", "Not significant"),
+      col = c("#D55E00", "grey50"),
+      pch = 16,
+      bty = "n"
+    )
+  })
+}
 
-    nonsignificant_data <- current_data %>%
-        filter(significance == "Not significant") %>%
-        mutate(
-            hover_text = paste0(
-                "<b>", symbol, "</b><br>",
-                "Gene ID: ", gene_id, "<br>",
-                "log2 Fold Change: ", round(log2FoldChange, 3), "<br>",
-                "Adjusted p-value: ", signif(padj, 3), "<br>",
-                "Classification: ", significance
-            )
-        )
-
-    plot_ly() %>%
-        add_markers(
-            data = significant_data,
-            x = ~log2FoldChange,
-            y = ~neg_log10_padj,
-            text = ~hover_text,
-            hovertemplate = "%{text}<extra></extra>",
-            name = paste0("Significant (", threshold_description, ")"),
-            marker = list(color = "#D55E00", size = 8, opacity = 0.7)
-        ) %>%
-        add_markers(
-            data = nonsignificant_data,
-            x = ~log2FoldChange,
-            y = ~neg_log10_padj,
-            text = ~hover_text,
-            hovertemplate = "%{text}<extra></extra>",
-            name = paste0("Not significant (fails ", threshold_description, ")"),
-            marker = list(color = "grey70", size = 8, opacity = 0.7)
-        ) %>%
-        layout(
-            title = list(text = "Volcano Plot of DEX-treated ASM Cells"),
-            xaxis = list(title = "log2 Fold Change"),
-            yaxis = list(title = "-log10(Adjusted P-value)"),
-            shapes = plot_shapes,
-            legend = list(title = list(text = "Significance"))
-        ) %>%
-        config(displayModeBar = TRUE)
-})
+shinyApp(ui, server)
 ```
 
 ## Discussion
