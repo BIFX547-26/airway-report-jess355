@@ -30,7 +30,7 @@ Use the sliders below to change the adjusted p-value threshold and the minimum a
 
 ```{shinylive-r}
 #| standalone: true
-#| files: top_2000.csv
+#| data-files: top_2000.csv
 
 library(shiny)
 
