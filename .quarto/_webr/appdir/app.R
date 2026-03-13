@@ -1,17 +1,9 @@
 library(shiny)
 
-degs <- read.csv("Airway_shinylive_files/top_2000.csv")
-degs$plot_padj <- pmax(degs$padj, .Machine$double.xmin)
-degs$neg_log10_padj <- -log10(degs$plot_padj)
-degs$gene_id <- degs$X
-
-format_threshold <- function(threshold) {
-  formatC(threshold, format = "f", digits = 3)
-}
-
-format_fold_change_threshold <- function(threshold) {
-  formatC(threshold, format = "f", digits = 2)
-}
+gist <- "https://gist.githubusercontent.com/johnsonra/121eb61bf4b09e4258b78e341b1819e9/raw/9d4d1650713378ce59e06a21b62f940433100a81/top_2000.csv"
+download.file(gist, 'top_2000.csv')
+top_2000 <- read.csv('top_2000.csv')
+top_2000$nl10p <- -log10(top_2000$padj)
 
 ui <- fluidPage(
   sliderInput(
